@@ -86,7 +86,7 @@ struct timeb starttime, endtime;
 FILE * fout, * frep, * fchk;
 
 uint32_t block_size = 100000;
-typedef struct {uint64_t number; uint8_t div_cnt;} TBlock;
+typedef struct {uint64_t number; uint8_t divs;} TBlock;
 TBlock * Block = NULL;
 uint32_t bSize = 0;
 
@@ -124,32 +124,38 @@ static __inline__ uint64_t string_to_u64(const char * s) {
 
 void factorize_range(void)
 {
-    uint32_t j, i, k, MaxFactor = rintl(sqrtl(Block[(bSize)-1].number));
-    uint64_t d;
+    uint32_t i, j, k, l, MaxFactor = rintl(sqrtl(Block[(bSize)-1].number));
+    uint64_t d, n;
+    n = Block[0].number;
     for (j = 0; j < primes_size && Primes[j] <= MaxFactor; j++) {
         d = Primes[j];
-        k = Block[0].number % d;
+        k = n % d;
         if (k) {
-            if (Block[0].number > d)
-                k = d - ((Block[0].number - d)/step) % d;
+            if (n > d)
+                k = d - ((n - d)/step) % d;
             else
-                k = ((d - Block[0].number)/step) % d;
+                k = ((d - n)/step) % d;
         }
-        for (i = k; i < bSize; i += d)
-            Divisors[Block[i].div_cnt++][i].prime = d;
-    }
-    for (i = 0; i < bSize; i++) {
-        d = Block[i].number;
-        for (k = 0; k < Block[i].div_cnt; k++) {
-            while (!(d % Divisors[k][i].prime)) {
-                d /= Divisors[k][i].prime;
-                Divisors[k][i].power++;
+        for (i = k; i < bSize; i += d){
+            if (!(Block[i].number % d)) {
+                Divisors[Block[i].divs][i].prime = d;
+                do {
+                    Block[i].number /= d;
+                    Divisors[Block[i].divs][i].power++;
+                } while (!(Block[i].number % d));
+                Block[i].divs++;
             }
         }
-        if (d != 1) {
-            Divisors[Block[i].div_cnt++][i].prime = d;
-            Divisors[k][i].power = 1;
+    }
+    for (i = 0; i < bSize; i++) {
+        k = Block[i].divs;
+        if (Block[i].number > 1) {
+            Divisors[Block[i].divs][i].prime = Block[i].number;
+            Divisors[Block[i].divs++][i].power++;
         }
+        for (j = 0; j < k; j++)
+            for (l = 0; l < Divisors[j][i].power; l++)
+                Block[i].number *= Divisors[j][i].prime;
     }
 }
 
@@ -361,13 +367,13 @@ void print_factors(uint32_t i)
     uint64_t n = Block[i].number;
     char divisorsStr[256], pclose[2], popen[2];
 //    fprintf(stderr, "------------------------------------------------------------------------------\n");
-//    if (Block[i].div_cnt == 1 && Divisors[0][i].power == 1)
+//    if (Block[i].divs == 1 && Divisors[0][i].power == 1)
 //        fprintf(stderr, "%" PRIu64 " is a prime number\n",n);
 //    else
-//        if (Block[i].div_cnt > 1) fprintf(stderr, "%" PRIu64 " has %i different divisors\n",n,Block[i].div_cnt);
+//        if (Block[i].divs > 1) fprintf(stderr, "%" PRIu64 " has %i different divisors\n",n,Block[i].divs);
 //        else fprintf(stderr, "%" PRIu64 " is a power of prime\n",n);
     bzero(divisorsStr, 256);
-    for (int j=0; j < Block[i].div_cnt; j++) {
+    for (int j=0; j < Block[i].divs; j++) {
         if (j > 0) sprintf(divisorsStr, "%s * ", divisorsStr);
         sprintf(divisorsStr, "%s%" PRIu64, divisorsStr, Divisors[j][i].prime);
         if (Divisors[j][i].power > 1) sprintf(divisorsStr, "%s^%i", divisorsStr, Divisors[j][i].power);
